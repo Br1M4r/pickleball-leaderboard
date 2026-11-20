@@ -1,0 +1,58 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "backend: build",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/backend/PickleballLeaderboard.Api/PickleballLeaderboard.Api.csproj"],
+      "problemMatcher": "$msCompile",
+      "group": "build"
+    },
+    {
+      "label": "backend: watch (hot reload)",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["watch", "run", "--launch-profile", "http"],
+      "options": { "cwd": "${workspaceFolder}/backend/PickleballLeaderboard.Api" },
+      "isBackground": true,
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "backend: test",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": "$msCompile",
+      "group": "test"
+    },
+    {
+      "label": "frontend: install",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "${workspaceFolder}/frontend" }
+    },
+    {
+      "label": "frontend: dev",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^x{100}$" },
+        "background": {
+          "beginsPattern": "VITE",
+          "endsPattern": "Local:"
+        }
+      }
+    },
+    {
+      "label": "Run full stack (watch)",
+      "dependsOn": ["backend: watch (hot reload)", "frontend: dev"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}

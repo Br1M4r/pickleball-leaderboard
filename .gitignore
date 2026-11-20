@@ -1,0 +1,11 @@
+# .NET
+**/bin/
+**/obj/
+*.user
+.vs/
+# Secrets
+**/.env
+!**/.env.example
+# Node
+node_modules/
+dist/
