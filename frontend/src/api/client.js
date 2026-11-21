@@ -1,4 +1,6 @@
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5080').replace(/\/+$/, '');
+// Empty = same origin: the API is served by the Vercel function at /api on this domain.
+// Set VITE_API_URL only to point the app at an API hosted elsewhere.
+const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 const TOKEN_KEY = 'pb_token';
 
 export class ApiError extends Error {

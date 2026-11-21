@@ -5,7 +5,8 @@ Manage players, record singles and doubles matches, and get automatically calcul
 | Layer | Tech |
 |---|---|
 | Frontend | React 19 + Vite + React Router, deployed to **Vercel** |
-| Backend | ASP.NET Core 10 Web API + Entity Framework Core 10, deployed with **Docker** (Render, Railway, Azure, Fly.io…) |
+| API (production) | Node.js serverless function in `frontend/api/` (Neon serverless driver), deployed to **Vercel** with the frontend |
+| API (original) | ASP.NET Core 10 Web API + EF Core 10 in `backend/`. Same endpoints and database; kept as a reference / alternative Docker deployment |
 | Database | **Neon** serverless PostgreSQL |
 | Auth | JWT bearer tokens, PBKDF2 password hashing, role-based access (Admin / Player) |
 
@@ -24,6 +25,9 @@ pickleball-leaderboard/
 │   │   └── .env.example
 │   └── PickleballLeaderboard.Tests/    # xUnit tests for the ranking engine
 ├── frontend/
+│   ├── api/                            # Vercel serverless API (single function, all /api/* routes)
+│   │   ├── index.js                    # router + auth + error handling
+│   │   └── _lib/                       # db, validation, ranking engine, schema, route handlers
 │   ├── src/
 │   │   ├── api/                        # fetch client + endpoint wrappers
 │   │   ├── components/                 # Layout, leaderboard table, podium, match cards, modals…
@@ -109,7 +113,9 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173**. The frontend reads the API address from `VITE_API_URL`. `.env.development` already points to `http://localhost:5080`.
+Open **http://localhost:5173**. `npm run dev` serves only the frontend. To run the site **and** the `/api` function together, use `npx vercel dev` (after `npx vercel env pull` to get `DATABASE_URL` and `JWT_SECRET`). Point it at a Neon dev branch, not production.
+
+To use the .NET API locally instead, set `VITE_API_URL=http://localhost:5080` in `.env.development`.
 
 Sign in with the `Admin__Email` / `Admin__Password` you configured, then:
 
@@ -121,52 +127,36 @@ Players can also self-register at `/register`.
 
 ---
 
-## 5. Deploy to production
+## 5. Deploy to production (Vercel + Neon only)
 
-### 5.1 Backend (Docker → Render, as an example)
+The frontend and the API deploy together as one Vercel project. `frontend/api/index.js` is a single serverless function that serves every `/api/*` route, so the site and API share a domain: no CORS, and no separate backend host.
 
-Any host that runs a Docker container or ASP.NET Core works. Render's free tier is a simple option.
-
-1. Push this project to GitHub.
-2. In Render: **New → Web Service**, connect the repo, and set:
-   - **Root Directory:** `backend`
-   - **Runtime:** Docker (it uses `backend/Dockerfile`)
-   - **Health Check Path:** `/health`
-3. Add these **environment variables**:
+1. In Vercel: **Add New → Project**, import the repo, set **Root Directory** to `frontend`.
+2. Add these **environment variables** (Production and Preview):
 
 | Key | Value |
 |---|---|
-| `DATABASE_URL` | Neon production connection string |
-| `Jwt__Secret` | long random secret (32+ chars) |
-| `Cors__AllowedOrigins` | your Vercel URL, e.g. `https://picklerank.vercel.app` (comma-separate multiple) |
-| `Admin__Email` | first admin email |
-| `Admin__Password` | first admin password |
+| `DATABASE_URL` | Neon connection string (no surrounding quotes) |
+| `JWT_SECRET` | long random secret, 32+ chars (`openssl rand -base64 48`) |
+| `NODEJS_HELPERS` | `0` (lets the function read raw photo uploads) |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | only needed for a brand-new database: creates the first admin |
+| `JWT_EXPIRY_MINUTES` | optional, default `480` |
 
-4. Deploy, then open `https://<your-service>.onrender.com/health`.
+3. Deploy (or `npx vercel deploy --prod` from `frontend/`). Check `https://<your-site>/api/health`. It reports whether the database and secret are configured, without printing them.
 
-Instead of steps 2–3 you can use the included `render.yaml`: **New → Blueprint**.
+Notes:
+- On first request against an empty database the API creates the same schema the EF Core model defines, the default ranking rules and the first admin. Existing databases (including ones created by the .NET API) are used as-is.
+- Password hashes are byte-compatible with ASP.NET Core Identity, so accounts created by the .NET API keep working.
+- Leave `VITE_API_URL` unset in Vercel. It's only for pointing the frontend at an API on another domain.
+- Auth rate limiting is per serverless instance (best effort), unlike the single-process .NET limiter.
 
-Render provides HTTPS automatically. The app honours `$PORT`, trusts forwarded headers and sends HSTS in production.
+> **Alternative:** the original ASP.NET Core API in `backend/` still works with the same database (Docker → Render via `render.yaml`, Railway, Azure, Fly.io). Deploy it, then set `VITE_API_URL` to its URL and `Cors__AllowedOrigins` to your Vercel URL.
 
-> **Other hosts:** Azure App Service (publish with `dotnet publish -c Release`, or deploy the container), Railway and Fly.io all work the same way. Set the same environment variables.
+### Production checklist
 
-> **Free-tier note:** free Render instances sleep when idle, so the first request after a pause takes about 30–50 seconds.
-
-### 5.2 Frontend (Vercel)
-
-1. In Vercel: **Add New → Project**, import the repo.
-2. Set **Root Directory** to `frontend`. Vercel detects Vite automatically (build `npm run build`, output `dist`).
-3. Add the environment variable `VITE_API_URL = https://<your-service>.onrender.com` (no trailing slash).
-4. Deploy. `vercel.json` rewrites every route to `index.html`, so deep links such as `/players/12` work.
-
-5. Go back to the backend and make sure `Cors__AllowedOrigins` contains the exact Vercel URL. If you change it, redeploy the API.
-
-### 5.3 Production checklist
-
-- [ ] Strong unique `Jwt__Secret` and admin password
-- [ ] `Cors__AllowedOrigins` contains only your real frontend URL(s)
+- [ ] Strong unique `JWT_SECRET` and admin password
 - [ ] Neon connection uses `sslmode=require`
-- [ ] Optionally remove `Admin__Password` from the host after the first successful start. It is only used when no admin exists yet.
+- [ ] Remove `ADMIN_PASSWORD` from Vercel after the first admin exists. It is only used when no admin exists yet.
 - [ ] Change the admin password from **My account** after the first login
 
 ---
