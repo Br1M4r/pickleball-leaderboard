@@ -16,6 +16,7 @@ public enum Gender
 public enum SkillLevel
 {
     Beginner,
+    Novice,
     Intermediate,
     Advanced,
     Pro
